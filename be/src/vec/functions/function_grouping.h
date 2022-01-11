@@ -25,14 +25,9 @@
 #include "vec/data_types/get_least_supertype.h"
 
 namespace doris::vectorized {
-class FunctionGrouping : public IFunction {
+
+class FunctionGroupingBase : public IFunction {
 public:
-    static constexpr auto name = "grouping";
-
-    static FunctionPtr create() { return std::make_shared<FunctionGrouping>(); }
-
-    String get_name() const override { return name; }
-
     size_t get_number_of_arguments() const override { return 1; }
 
     bool use_default_implementation_for_constants() const override { return false; }
@@ -42,32 +37,51 @@ public:
     DataTypePtr get_return_type_impl(const ColumnsWithTypeAndName& arguments) const override {
         return std::make_shared<DataTypeInt64>();
     }
+};
+
+class FunctionGrouping : public FunctionGroupingBase {
+public:
+    static constexpr auto name = "grouping";
+
+    static FunctionPtr create() { return std::make_shared<FunctionGrouping>(); }
+
+    String get_name() const override { return name; }
 
     Status execute_impl(FunctionContext* context, Block& block, const ColumnNumbers& arguments,
                         size_t result, size_t input_rows_count) override {
-        if (arguments.size() != 1)
-            return Status::InternalError("Illegal number of parameters");
-
         const ColumnWithTypeAndName& src_column = block.get_by_position(arguments[0]);
         const ColumnWithTypeAndName& rel_column = block.get_by_position(result);
         if (!src_column.column)
             return Status::InternalError("Illegal column " + src_column.column->get_name() + " of first argument of function " + name);
 
-        bool src_is_nullable = src_column.type->is_nullable();
-        TypeIndex src_typeid = src_column.type->get_type_id();
-        TypeIndex res_typeid = rel_column.type->get_type_id();
-        if (res_typeid != TypeIndex::Int64)
-            return Status::InternalError("Return type is not int64 of function grouping");
-
+        DCHECK(src_column.type->is_nullable() == true);
         MutableColumnPtr res_column = rel_column.type->create_column();
-        if (src_is_nullable) {
-            auto* src_nullable_column = reinterpret_cast<ColumnNullable *>(const_cast<IColumn *>(src_column.column.get()));
-            res_column->insert_range_from(*src_nullable_column->get_nested_column_ptr().get(), 0, src_column.column->size());
-        } else {
-            DCHECK(src_typeid == TypeIndex::Int64);
-            res_column->insert_range_from(*src_column.column, 0, src_column.column->size());
-        }
+        auto* src_nullable_column = reinterpret_cast<ColumnNullable *>(const_cast<IColumn *>(src_column.column.get()));
+        res_column->insert_range_from(*src_nullable_column->get_nested_column_ptr().get(), 0, src_column.column->size());
+        block.get_by_position(result).column = std::move(res_column);
+        return Status::OK();
+    }
+};
 
+class FunctionGroupingId : public FunctionGroupingBase {
+public:
+    static constexpr auto name = "grouping_id";
+
+    static FunctionPtr create() { return std::make_shared<FunctionGroupingId>(); }
+
+    String get_name() const override { return name; }
+
+    Status execute_impl(FunctionContext* context, Block& block, const ColumnNumbers& arguments,
+                        size_t result, size_t input_rows_count) override {
+        const ColumnWithTypeAndName& src_column = block.get_by_position(arguments[0]);
+        const ColumnWithTypeAndName& rel_column = block.get_by_position(result);
+        if (!src_column.column)
+            return Status::InternalError("Illegal column " + src_column.column->get_name() + " of first argument of function " + name);
+
+        DCHECK(src_column.type->is_nullable() == true);
+        MutableColumnPtr res_column = rel_column.type->create_column();
+        auto* src_nullable_column = reinterpret_cast<ColumnNullable *>(const_cast<IColumn *>(src_column.column.get()));
+        res_column->insert_range_from(*src_nullable_column->get_nested_column_ptr().get(), 0, src_column.column->size());
         block.get_by_position(result).column = std::move(res_column);
         return Status::OK();
     }

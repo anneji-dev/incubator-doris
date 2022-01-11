@@ -21,4 +21,7 @@ namespace doris::vectorized {
 void register_function_grouping(SimpleFunctionFactory& factory) {
     factory.register_function<FunctionGrouping>();
 }
+void register_function_grouping_id(SimpleFunctionFactory& factory) {
+    factory.register_function<FunctionGroupingId>();
+}
 }

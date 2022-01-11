@@ -202,6 +202,8 @@ Status VRepeatNode::get_next(RuntimeState* state, Block* block, bool* eos) {
         }
     }
 
+    RETURN_IF_ERROR(get_repeated_block(_child_block.get(), _repeat_id_idx, block));
+
     _repeat_id_idx++;
 
     int size = _repeat_id_list.size();
